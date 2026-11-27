@@ -1,0 +1,151 @@
+# 接入自定义组件
+
+本指南介绍如何把任意 Vue 控件接入 Schema 体系：推荐通过 `connect` 完成数据源映射、阅读态与表单生命周期绑定。
+
+## 推荐方式：connect + mapProps
+
+可复用的桥接组件推荐使用 `connect`：绑定层会自动注入 `modelValue` / `onUpdate:modelValue`，写入值时走 `field.onInput()`，从而触发内核的输入生命周期（`onFieldInputValueChange` / `onFormInputChange`）、校验与联动；同时用 `mapProps` 描述字段到组件 props 的映射。映射对象的键值含义为 `字段侧属性: 组件侧属性`。
+
+先准备一个接收 `options` 的 Vue 包装组件：
+
+```vue
+<!-- BaseSelect.vue -->
+<script setup lang="ts">
+import { Select } from 'antdv-next'
+
+defineProps<{
+  options?: Array<{ label: string; value: string }>
+}>()
+
+const model = defineModel<string>()
+</script>
+
+<template>
+  <Select v-model:value="model" :options="options" v-bind="$attrs" />
+</template>
+```
+
+再用 `connect` 完成字段与控件的桥接：
+
+```ts
+import { connect, mapProps, mapReadPretty } from '@formvk/vue'
+import { TextSelect } from '@formvk/antdv'
+
+import BaseSelect from './BaseSelect.vue'
+
+export const Select = connect(
+  BaseSelect,
+  // dataSource 映射为 options；值本身由绑定层通过 modelValue 双向同步
+  mapProps({ dataSource: 'options' }),
+  // 阅读态自动切换为 TextSelect
+  mapReadPretty(TextSelect)
+)
+```
+
+注册到工厂后即可在 Schema 中使用：
+
+```ts
+const { OptionsProvider, fragment: f } = createSchemaOptions({
+  components: { Select },
+  voidComponents: { FormItem },
+  defaultDecorator: 'FormItem',
+})
+```
+
+常见映射写法：
+
+| 映射 | 含义 | 典型组件 |
+| --- | --- | --- |
+| `mapProps({ dataSource: 'options' })` | Schema `enum` 映射到 `options` | Select / RadioGroup / CheckboxGroup |
+| `mapProps({ dataSource: 'data' })` | 映射到树 / 穿梭框数据 | TreeSelect / Transfer |
+
+函数形式的 mapper 适合做更复杂的转换，签名为 `(props, field) => props`。
+
+## 不推荐直接使用 useField + field.value
+
+`useField()` 只负责拿到字段引用，不包含值写入的生命周期处理。手动绑定成下面这样会错过内核的表单生命周期：
+
+```vue
+<!-- ❌ 不推荐：setValue 只写值 -->
+<Select :model-value="field?.value" @update:model-value="field?.setValue($event)" />
+```
+
+`setValue()` 只写入字段值，不会触发 `onFieldInputValueChange` / `onFormInputChange`，也不会执行 `onInput` 时机的校验，导致 effects 联动、校验时机与 Schema 渲染不一致。
+
+如果确实需要脱离 Schema 手动绑定，至少把写入改为 `field.onInput()`：
+
+```vue
+<script setup lang="ts">
+import { useField } from '@formvk/vue'
+import { Select } from 'antdv-next'
+
+const field = useField()
+</script>
+
+<template>
+  <Select
+    :model-value="field?.value"
+    :disabled="field?.disabled || field?.readOnly"
+    @update:model-value="field?.onInput($event)"
+  />
+</template>
+```
+
+但这仍需自行处理 readPretty、数据源映射和空值占位，只适合一次性场景；可复用组件请使用 `connect`。
+
+## 处理值格式转换
+
+Ant Design Vue Next 的日期组件以 dayjs 对象作为值，桥接层的 `DatePicker` 直接透传 dayjs，不做字符串转换。如果业务希望字段值使用字符串，可以在 mapper 中完成转换：
+
+```ts
+import { connect, mapProps } from '@formvk/vue'
+import { DatePicker } from 'antdv-next'
+import dayjs from 'dayjs'
+
+export const StringDatePicker = connect(
+  DatePicker,
+  mapProps((props, field) => ({
+    ...props,
+    value: props.value ? dayjs(props.value) : undefined,
+    onUpdate:value: (value: any) => field.onInput(value ? value.format('YYYY-MM-DD') : undefined),
+  }))
+)
+```
+
+## 支持阅读态
+
+`mapReadPretty(Component)` 会在字段 `pattern === 'readPretty'` 时自动替换渲染组件。可以复用本包导出的 `Text` / `TextSelect` 等，也可以传自研的只读组件：
+
+```ts
+connect(MyPicker, mapReadPretty(MyPickerText))
+```
+
+阅读态组件从 props 中读取 `modelValue`，空值占位由 `Placeholder` 上下文统一处理。
+
+## 自定义装饰器
+
+装饰器（如 `FormItem`）负责 label、校验反馈与布局。自定义装饰器同样用 `useField` 读取字段状态，纯展示版本可以基于本包导出的 `BaseItem` 封装：
+
+```vue
+<script setup lang="ts">
+import { useField } from '@formvk/vue'
+import { BaseItem } from '@formvk/antdv'
+
+defineOptions({ name: 'MyDecorator' })
+
+const field = useField()
+</script>
+
+<template>
+  <BaseItem v-bind="$attrs" :feedback-text="field?.selfErrors?.join(', ')">
+    <slot />
+  </BaseItem>
+</template>
+```
+
+## 注意事项
+
+- Vue 版不需要 `observer` 之类的包裹：`useField` 返回字段引用，在模板或 `computed` 中读取字段状态即可获得响应式更新；`connect` / `mapProps` / `mapReadPretty` 已在绑定层完成追踪与透传。
+- 读取字段状态可以直接用 `useField`，但写入值不要手动调用 `setValue`：请走 `connect` 的绑定层，或至少使用 `field.onInput()`，否则会错过内核的输入生命周期。
+- 自定义控件约定通过 `modelValue` / `onUpdate:modelValue` 通信；控件事件签名不同时，在函数 mapper 或包装组件里转换为表单需要的值。
+- 数组类自定义组件可参考 `ArrayBase` 的上下文能力（`useArray` / `useIndex` / `useRecord`），见 [ArrayBase 参考](/components/array-base)。

@@ -1,0 +1,61 @@
+{
+  "name": "@formvk/antdv",
+  "version": "1.0.0-beta.1",
+  "description": "Ant Design Vue Next component bridge for Formvk",
+  "keywords": [
+    "antdv-next",
+    "bridge",
+    "form",
+    "formvk",
+    "vue"
+  ],
+  "license": "MIT",
+  "files": [
+    "dist",
+    "global.d.ts",
+    "CHANGELOG.md"
+  ],
+  "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./resolver": {
+      "types": "./dist/resolver.d.ts",
+      "import": "./dist/resolver.js"
+    },
+    "./global": {
+      "types": "./global.d.ts"
+    },
+    "./package.json": "./package.json"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "dev": "vite build --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "oxlint src"
+  },
+  "dependencies": {
+    "@antdv-next/cssinjs": "^1.2.0",
+    "@antdv-next/icons": "^1.1.2",
+    "@formvk/core": "catalog:",
+    "@formvk/models": "catalog:",
+    "@formvk/schema": "catalog:",
+    "@formvk/shared": "catalog:",
+    "@formvk/vue": "catalog:",
+    "dayjs": "^1.11.23",
+    "sortablejs": "^1.15.7"
+  },
+  "peerDependencies": {
+    "antdv-next": "^1.8.0",
+    "vue": "^3.5.0"
+  }
+}

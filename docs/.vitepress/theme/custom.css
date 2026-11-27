@@ -1,0 +1,42 @@
+:root {
+  --vp-c-brand-1: #1677ff;
+  --vp-c-brand-2: #4096ff;
+  --vp-c-brand-3: #69b1ff;
+  --vp-c-brand-soft: rgba(22, 119, 255, 0.14);
+}
+
+.vp-doc table {
+  display: table;
+  width: 100%;
+}
+
+.vp-doc th,
+.vp-doc td {
+  padding: 8px 12px;
+}
+
+.vp-doc .custom-block {
+  border-radius: 8px;
+}
+
+/* 示例里的 antdv-next 表格复用组件自身样式，抵消 VitePress 文档表格的默认样式 */
+.vp-doc .ant-table table {
+  display: table;
+  margin: 0;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow-x: visible;
+}
+
+.vp-doc .ant-table th,
+.vp-doc .ant-table td {
+  border: 0;
+  padding: 0;
+  font-size: inherit;
+  text-align: inherit;
+}
+
+.vp-doc .ant-table tr {
+  border-top: 0;
+  background-color: transparent;
+}
